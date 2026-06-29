@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OC印象曲名片生成器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #e2ebd9;
+            --card-bg: #e2e8f0;
+            --text-main: #1a1a1a;
+            --text-sub: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background-color: #f3f7f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: var(--text-main);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: #2d3748;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #1a202c;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .upload-bg-btn {
+            padding: 6px 12px;
+            background-color: #edf2f7;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .upload-bg-btn:hover {
+            background-color: #e2e8f0;
+        }
+
+        .card-container {
+            width: 1000px;
+            height: 562px;
+            background-color: var(--bg-color);
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .card-bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .card-content-layer {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+            padding: 35px;
+            display: flex;
+            gap: 30px;
+        }
+
+        .upload-input {
+            display: none;
+        }
+
+        .placeholder-box {
+            border: 2px dashed #94a3b8;
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #64748b;
+            font-size: 14px;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            transition: all 0.2s;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .placeholder-box:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            border-color: #64748b;
+        }
+
+        .placeholder-box span {
+            pointer-events: none;
+            z-index: 1;
+            background: rgba(255,255,255,0.7);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .export-canvas-placeholder {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        [contenteditable="true"] {
+            outline: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        [contenteditable="true"]:hover, [contenteditable="true"]:focus {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .left-panel {
+            width: 260px;
+            background-color: rgba(255, 255, 255, 0.4);
+            border-radius: 24px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .avatar-box {
+            width: 100%;
+            height: 210px;
+        }
+
+        .oc-name {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-top: 5px;
+        }
+
+        .oc-title {
+            font-size: 14px;
+            font-style: italic;
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        .oc-desc {
+            font-size: 12px;
+            line-height: 1.6;
+            color: rgba(0, 0, 0, 0.7);
+            white-space: pre-wrap;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .right-panel {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .song-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .song-item {
+            background-color: rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+        }
+
+        .song-index {
+            font-size: 20px;
+            font-weight: bold;
+            color: rgba(0,0,0,0.5);
+            width: 20px;
+        }
+
+        .song-cover {
+            width: 45px;
+            height: 45px;
+        }
+
+        .song-info {
+            flex-grow: 1;
+        }
+
+        .song-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .song-artist {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        .heart-icon {
+            color: #ef4444;
+            font-size: 16px;
+            position: absolute;
+            right: 20px;
+        }
+
+        .imagery-grid {
+            display: flex;
+            gap: 15px;
+        }
+
+        .imagery-box {
+            flex: 1;
+            height: 120px;
+        }
+
+        .lyrics-container {
+            border-left: 4px solid rgba(0, 0, 0, 0.3);
+            padding-left: 15px;
+            margin-top: 10px;
+        }
+
+        .lyrics-text {
+            font-size: 15px;
+            font-style: italic;
+            line-height: 1.5;
+            color: rgba(0, 0, 0, 0.8);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <div class="control-item">
+            <label class="upload-bg-btn" for="bgImageInput">上传背景图</label>
+            <input type="file" id="bgImageInput" class="upload-input" accept="image/*">
+        </div>
+        <div class="control-item">
+            <label for="blurInput">背景模糊度：</label>
+            <input type="range" id="blurInput" min="0" max="20" value="0" step="1" style="width: 100px;">
+            <span id="blurValue">0px</span>
+        </div>
+        <button class="btn" id="exportBtn">导出为图片</button>
+    </div>
+
+    <div class="card-container" id="musicCard">
+        <div class="card-bg-layer" id="cardBgLayer"></div>
+        
+        <div class="card-content-layer">
+            <div class="left-panel">
+                <div class="placeholder-box avatar-box" id="pic-avatar" onclick="triggerInput(this)">
+                    <span>上传头像</span>
+                    <input type="file" class="upload-input" accept="image/*">
+                </div>
+                <div class="oc-name" contenteditable="true">角色名字</div>
+                <div class="oc-title" contenteditable="true">性格与身份概括</div>
+                <div class="oc-desc" contenteditable="true">在这里简短地介绍一下你的OC吧。<br>点击即可直接修改这里的文字内容。</div>
+            </div>
+
+            <div class="right-panel">
+                <div class="song-list">
+                    <div class="song-item">
+                        <span class="song-index">1</span>
+                        <div class="placeholder-box song-cover" id="pic-song-1" onclick="triggerInput(this)">
+                            <span>传图</span>
+                            <input type="file" class="upload-input" accept="image/*">
+                        </div>
+                        <div class="song-info">
+                            <div class="song-title" contenteditable="true">歌曲名 1</div>
+                            <div class="song-artist" contenteditable="true">艺术家 / 歌手</div>
+                        </div>
+                        <span class="heart-icon">❤</span>
+                    </div>
+                    <div class="song-item">
+                        <span class="song-index">2</span>
+                        <div class="placeholder-box song-cover" id="pic-song-2" onclick="triggerInput(this)">
+                            <span>传图</span>
+                            <input type="file" class="upload-input" accept="image/*">
+                        </div>
+                        <div class="song-info">
+                            <div class="song-title" contenteditable="true">歌曲名 2</div>
+                            <div class="song-artist" contenteditable="true">艺术家 / 歌手</div>
+                        </div>
+                    </div>
+                    <div class="song-item">
+                        <span class="song-index">3</span>
+                        <div class="placeholder-box song-cover" id="pic-song-3" onclick="triggerInput(this)">
+                            <span>传图</span>
+                            <input type="file" class="upload-input" accept="image/*">
+                        </div>
+                        <div class="song-info">
+                            <div class="song-title" contenteditable="true">歌曲名 3</div>
+                            <div class="song-artist" contenteditable="true">艺术家 / 歌手</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="imagery-grid">
+                    <div class="placeholder-box imagery-box" id="pic-img-1" onclick="triggerInput(this)">
+                        <span>传图三 (植物)</span>
+                        <input type="file" class="upload-input" accept="image/*">
+                    </div>
+                    <div class="placeholder-box imagery-box" id="pic-img-2" onclick="triggerInput(this)">
+                        <span>传图三 (风景)</span>
+                        <input type="file" class="upload-input" accept="image/*">
+                    </div>
+                    <div class="placeholder-box imagery-box" id="pic-img-3" onclick="triggerInput(this)">
+                        <span>传图三 (物品)</span>
+                        <input type="file" class="upload-input" accept="image/*">
+                    </div>
+                    <div class="placeholder-box imagery-box" id="pic-img-4" onclick="triggerInput(this)">
+                        <span>传图三 (动物)</span>
+                        <input type="file" class="upload-input" accept="image/*">
+                    </div>
+                </div>
+
+                <div class="lyrics-container">
+                    <div class="lyrics-text" contenteditable="true">“在这里填入你认为最符合你OC的歌词或句子。点击即可直接编辑。”</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageStore = {};
+        let currentBlur = 0; // 全局变量，记录当前的模糊数值
+
+        function triggerInput(el) {
+            const input = el.querySelector('.upload-input');
+            if (input) input.click();
+        }
+
+        const bgImageInput = document.getElementById('bgImageInput');
+        const cardBgLayer = document.getElementById('cardBgLayer');
+        const blurInput = document.getElementById('blurInput');
+        const blurValueDisplay = document.getElementById('blurValue');
+
+        bgImageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    cardBgLayer.style.backgroundImage = `url('${event.target.result}')`;
+                    imageStore['cardBgLayer'] = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 网页端平时预览，继续用 CSS 滤镜，性能好、不卡顿
+        blurInput.addEventListener('input', function(e) {
+            currentBlur = parseInt(e.target.value);
+            blurValueDisplay.textContent = `${currentBlur}px`;
+            cardBgLayer.style.filter = `blur(${currentBlur}px)`;
+        });
+
+        document.querySelectorAll('.card-content-layer .upload-input').forEach(input => {
+            input.addEventListener('click', function(e) { e.stopPropagation(); });
+            input.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const box = input.closest('.placeholder-box');
+                        if (box) {
+                            box.style.backgroundImage = `url('${event.target.result}')`;
+                            box.classList.add('has-image');
+                            box.style.border = 'none';
+                            const span = box.querySelector('span');
+                            if (span) span.style.display = 'none';
+                            imageStore[box.id] = event.target.result;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+
+        /**
+         * 升级版 Canvas 生成器：支持动态注入 blur 模糊
+         */
+        function makeCoverCanvas(dataURL, W, H, scale, blurPx = 0) {
+            const cvs = document.createElement('canvas');
+            cvs.width  = W * scale;
+            cvs.height = H * scale;
+            cvs.style.width  = W + 'px';
+            cvs.style.height = H + 'px';
+            const ctx = cvs.getContext('2d');
+            const img = new Image();
+            img.src = dataURL;
+
+            const iW = img.naturalWidth,  iH = img.naturalHeight;
+            const cW = cvs.width,         cH = cvs.height;
+            const scale_fit = Math.max(cW / iW, cH / iH);
+            const dW = iW * scale_fit, dH = iH * scale_fit;
+            const dx = (cW - dW) / 2,  dy = (cH - dH) / 2;
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+
+            // 核心修复：如果传入了模糊度，利用 Canvas 2D 上下文的原生 filter 写入模糊（html2canvas 对此支持极好）
+            if (blurPx > 0) {
+                ctx.filter = `blur(${blurPx * scale}px)`; // 模糊半径也要随 scale 放大，保证导出图的比例一致
+            }
+
+            ctx.drawImage(img, dx, dy, dW, dH);
+            return cvs;
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', async () => {
+            const SCALE = 3;
+            const card = document.getElementById('musicCard');
+            
+            // 导出时暂时移除外部容器的 CSS 滤镜干扰
+            const oldFilter = cardBgLayer.style.filter;
+            cardBgLayer.style.filter = "none";
+
+            const oldSmooth = card.style.webkitFontSmoothing;
+            card.style.webkitFontSmoothing = "antialiased";
+            card.style.mozOsxFontSmoothing = "grayscale";
+
+            const restoreList = [];
+            const targets = [];
+            if (imageStore['cardBgLayer']) targets.push(cardBgLayer);
+            document.querySelectorAll('.placeholder-box.has-image').forEach(box => targets.push(box));
+
+            for (const el of targets) {
+                const isBgLayer = (el === cardBgLayer);
+                const dataURL = isBgLayer ? imageStore['cardBgLayer'] : imageStore[el.id];
+                if (!dataURL) continue;
+
+                const W = el.offsetWidth;
+                const H = el.offsetHeight;
+
+                await new Promise(resolve => {
+                    const img = new Image();
+                    img.onload = resolve;
+                    img.src = dataURL;
+                });
+
+                // 关键点：如果是背景图层，就把当前滑块的模糊度 currentBlur 传进去
+                const blurValueToApply = isBgLayer ? currentBlur : 0;
+                const cvs = makeCoverCanvas(dataURL, W, H, SCALE, blurValueToApply);
+                cvs.className = 'export-canvas-placeholder';
+
+                const oldBg = el.style.backgroundImage;
+                el.style.backgroundImage = 'none';
+                el.appendChild(cvs);
+
+                restoreList.push({ el, cvs, oldBg });
+            }
+
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
+            try {
+                const canvas = await html2canvas(card, {
+                    useCORS: true,
+                    allowTaint: true,
+                    scale: SCALE, 
+                    backgroundColor: "#e2ebd9",
+                    logging: false,
+                    imageTimeout: 0
+                });
+
+                const link = document.createElement("a");
+                link.download = "OC_Music_Card_Perfect.png";
+                link.href = canvas.toDataURL("image/png", 1.0); 
+                link.click();
+
+            } catch (err) {
+                console.error(err);
+                alert("导出失败，请重试。");
+            } finally {
+                for (const { el, cvs, oldBg } of restoreList) {
+                    el.removeChild(cvs);
+                    el.style.backgroundImage = oldBg;
+                }
+                cardBgLayer.style.filter = oldFilter;
+                card.style.webkitFontSmoothing = oldSmooth;
+            }
+        });
+    </script>
+</body>
+</html>
