@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OC印象曲名片生成器</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- 引入纯算法高斯模糊库，解决手机和各平台导出失灵/无模糊的问题 -->
+    <script src="https://cdn.jsdelivr.net/npm/stackblur-canvas@2.6.0/dist/stackblur.min.js"></script>
     <style>
         :root {
             --bg-color: #e2ebd9;
@@ -430,12 +432,14 @@
         });
 
         /**
-         * 升级版 Canvas 生成器：支持动态注入 blur 模糊
+         * 升级版 Canvas 生成器：采用像素级 StackBlur 烘焙模糊，跨端兼容性100%
          */
         function makeCoverCanvas(dataURL, W, H, scale, blurPx = 0) {
             const cvs = document.createElement('canvas');
-            cvs.width  = W * scale;
-            cvs.height = H * scale;
+            const targetW = W * scale;
+            const targetH = H * scale;
+            cvs.width  = targetW;
+            cvs.height = targetH;
             cvs.style.width  = W + 'px';
             cvs.style.height = H + 'px';
             const ctx = cvs.getContext('2d');
@@ -443,24 +447,30 @@
             img.src = dataURL;
 
             const iW = img.naturalWidth,  iH = img.naturalHeight;
-            const cW = cvs.width,         cH = cvs.height;
-            const scale_fit = Math.max(cW / iW, cH / iH);
+            const scale_fit = Math.max(targetW / iW, targetH / iH);
             const dW = iW * scale_fit, dH = iH * scale_fit;
-            const dx = (cW - dW) / 2,  dy = (cH - dH) / 2;
+            const dx = (targetW - dW) / 2,  dy = (targetH - dH) / 2;
             
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
-            // 核心修复：如果传入了模糊度，利用 Canvas 2D 上下文的原生 filter 写入模糊（html2canvas 对此支持极好）
-            if (blurPx > 0) {
-                ctx.filter = `blur(${blurPx * scale}px)`; // 模糊半径也要随 scale 放大，保证导出图的比例一致
+            ctx.drawImage(img, dx, dy, dW, dH);
+
+            // 核心修复：不用容易失效的 ctx.filter，改用 StackBlur 纯算法打散像素进行硬件级模糊烘焙
+            if (blurPx > 0 && window.StackBlur) {
+                const actualBlurRadius = Math.round(blurPx * scale);
+                StackBlur.canvasRGBA(cvs, 0, 0, targetW, targetH, actualBlurRadius);
             }
 
-            ctx.drawImage(img, dx, dy, dW, dH);
             return cvs;
         }
 
         document.getElementById('exportBtn').addEventListener('click', async () => {
+            const exportBtn = document.getElementById('exportBtn');
+            const originalBtnText = exportBtn.textContent;
+            exportBtn.textContent = "生成中...";
+            exportBtn.disabled = true;
+
             const SCALE = 3;
             const card = document.getElementById('musicCard');
             
@@ -515,10 +525,36 @@
                     imageTimeout: 0
                 });
 
-                const link = document.createElement("a");
-                link.download = "OC_Music_Card_Perfect.png";
-                link.href = canvas.toDataURL("image/png", 1.0); 
-                link.click();
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (!blob) throw new Error('生成图片失败');
+
+                const file = new File([blob], 'OC_Music_Card_Perfect.png', { type: 'image/png' });
+
+                // 手机端优先尝试原生分享面板（直接保存到相册）
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({ files: [file] });
+                        return;
+                    } catch (shareErr) {
+                        if (shareErr && shareErr.name === 'AbortError') return;
+                    }
+                }
+
+                // 兜底：经典下载或长按保存
+                const blobUrl = URL.createObjectURL(blob);
+                const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+                if (!isIOS) {
+                    const link = document.createElement("a");
+                    link.download = "OC_Music_Card_Perfect.png";
+                    link.href = blobUrl;
+                    link.click();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                } else {
+                    window.open(blobUrl, '_blank');
+                    alert('图片已在新窗口打开，请长按保存图片到相册。');
+                }
 
             } catch (err) {
                 console.error(err);
@@ -530,6 +566,8 @@
                 }
                 cardBgLayer.style.filter = oldFilter;
                 card.style.webkitFontSmoothing = oldSmooth;
+                exportBtn.textContent = originalBtnText;
+                exportBtn.disabled = false;
             }
         });
     </script>
